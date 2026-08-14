@@ -154,6 +154,13 @@
     .art{width:64px;height:64px;}
     .deck-meta .title{font-size:1.3rem;}
   }
+.track-list{ margin-top:14px; max-height:180px; overflow-y:auto; border-top:1px solid rgba(0,0,0,0.15); }
+.track-row{ display:flex; align-items:center; gap:10px; padding:9px 4px; cursor:pointer; border-bottom:1px solid rgba(0,0,0,0.08); font-family:'Poppins',sans-serif; }
+.track-row:hover{ background:rgba(0,0,0,0.05); }
+.track-row.active{ background:rgba(0,0,0,0.08); font-weight:600; }
+.track-row .tr-num{ width:20px; font-size:12px; opacity:0.6; }
+.track-row .tr-title{ flex:1; font-size:14px; }
+.track-row .tr-sub{ font-size:11px; opacity:0.6; }
 </style>
 </head>
 <body>
@@ -199,6 +206,8 @@
         </div>
         <div class="wordmark"><span class="bar"></span>TAAL DECK</div>
       </div>
+
+      <div class="track-list" id="track-list"></div>
     </div>
 
     <footer class="note">
@@ -216,9 +225,6 @@
    ========================================================================= */
 const PLAYLISTS = {
   "सुनहरे दिन": [
-    { id:"g1", title:"Track title", artist:"Artist", film:"Film", year:"", videoId:null },
-    { id:"g2", title:"Track title", artist:"Artist", film:"Film", year:"", videoId:null },
-    { id:"g3", title:"Track title", artist:"Artist", film:"Film", year:"", videoId:null },
     { id:"g4", title:"New Song 1", artist:"", film:"", year:"", videoId:"QQmA1LM1LiM" },
     { id:"g5", title:"New Song 2", artist:"", film:"", year:"", videoId:"e9-43c2WaMg" },
     { id:"g6", title:"New Song 3", artist:"", film:"", year:"", videoId:"XkyCP6_2aa8" },
@@ -258,6 +264,7 @@ const els = {
   playIcon: document.getElementById('play-icon'),
   prev: document.getElementById('prev'),
   next: document.getElementById('next'),
+  trackList: document.getElementById('track-list'),
 };
 
 /* ---------------- tape tabs (playlists) ---------------- */
@@ -282,6 +289,17 @@ function renderMeta(){
   els.trackTitle.textContent = t.title;
   els.trackSub.textContent = [t.artist, t.year].filter(Boolean).join(' · ');
 }
+function renderTrackList(){
+  const list = PLAYLISTS[currentPlaylistName];
+  els.trackList.innerHTML = '';
+  list.forEach((t, i)=>{
+    const row = document.createElement('div');
+    row.className = 'track-row' + (i===currentIndex ? ' active' : '');
+    row.innerHTML = `<span class="tr-num">${i+1}</span><span class="tr-title">${t.title}</span><span class="tr-sub">${[t.artist,t.film].filter(Boolean).join(' · ')}</span>`;
+    row.addEventListener('click', ()=>{ loadTrack(i, true); renderTrackList(); });
+    els.trackList.appendChild(row);
+  });
+}
 
 /* ---------------- YouTube IFrame API ---------------- */
 function loadYouTubeAPI(){
@@ -295,6 +313,7 @@ function loadTrack(index, autoplay){
   currentIndex = index;
   const t = currentTrack();
   renderMeta();
+  renderTrackList();
   resetSeek();
   isPlaying = false; updatePlayIcon();
 
@@ -491,6 +510,7 @@ attachSeekHandlers(els.seek);
 /* ---------------- boot ---------------- */
 renderTapeTabs();
 renderMeta();
+renderTrackList();
 loadYouTubeAPI();
 </script>
 </body>
