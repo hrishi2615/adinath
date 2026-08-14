@@ -236,9 +236,18 @@ const LETTERS = "ABCDEFGH";
 let currentPlaylistName = PLAYLIST_NAMES[0];
 let currentIndex = 0;
 let ytPlayer = null, ytReady = false, isPlaying = false, seekDragging = false, progressTimer = null;
-let backend = 'yt'; // 'yt' | 'html5'
+let backend = 'yt'; // 'yt' | 'yt-playlist' | 'html5'
 const htmlAudio = new Audio();
 htmlAudio.preload = 'metadata';
+
+// Persistent containers so the YouTube iframe is NEVER removed/re-added to the DOM
+// (removing and re-appending an iframe forces the browser to reload it, which
+// breaks the YouTube player's internal state and causes "stuck on same video" bugs).
+const ytHost = document.createElement('div');
+ytHost.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:none;';
+const fallbackDiv = document.createElement('div');
+fallbackDiv.className = 'art-fallback';
+fallbackDiv.style.display = 'none';
 
 const els = {
   art: document.getElementById('art'),
@@ -255,6 +264,11 @@ const els = {
   prev: document.getElementById('prev'),
   next: document.getElementById('next'),
 };
+els.art.appendChild(ytHost);
+els.art.appendChild(fallbackDiv);
+
+function showYTHost(){ ytHost.style.display = 'block'; fallbackDiv.style.display = 'none'; }
+function showFallback(html){ fallbackDiv.innerHTML = html; fallbackDiv.style.display = 'flex'; ytHost.style.display = 'none'; }
 
 /* ---------------- tape tabs (playlists) ---------------- */
 function renderTapeTabs(){
@@ -301,7 +315,7 @@ function loadTrack(index, autoplay){
 
   if(t.src){
     backend = 'html5';
-    els.art.innerHTML = '<div class="art-fallback">🎵</div>';
+    showFallback('🎵');
     htmlAudio.src = t.src;
     htmlAudio.currentTime = 0;
     htmlAudio.load();
@@ -313,12 +327,9 @@ function loadTrack(index, autoplay){
   if(t.playlistId){
     backend = 'yt-playlist';
     if(!ytReady) return;
+    showYTHost();
     if(!ytPlayer){
-      els.art.innerHTML = '';
-      const host = document.createElement('div');
-      host.style.width = '100%'; host.style.height = '100%';
-      els.art.appendChild(host);
-      ytPlayer = new YT.Player(host, {
+      ytPlayer = new YT.Player(ytHost, {
         width:'100%', height:'100%',
         playerVars:{ listType:'playlist', list:t.playlistId, autoplay:autoplay?1:0, controls:0, modestbranding:1, rel:0, playsinline:1 },
         events:{
@@ -328,8 +339,6 @@ function loadTrack(index, autoplay){
         }
       });
     } else {
-      els.art.innerHTML = '';
-      els.art.appendChild(ytPlayer.getIframe());
       ytPlayer.loadPlaylist({ list:t.playlistId, listType:'playlist' });
       if(!autoplay) ytPlayer.pauseVideo();
     }
@@ -337,18 +346,15 @@ function loadTrack(index, autoplay){
   }
 
   if(!t.videoId){
-    els.art.innerHTML = '<div class="art-fallback">add a<br/>videoId</div>';
+    showFallback('add a<br/>videoId');
     return;
   }
   backend = 'yt';
   if(!ytReady) return;
+  showYTHost();
 
   if(!ytPlayer){
-    els.art.innerHTML = '';
-    const host = document.createElement('div');
-    host.style.width = '100%'; host.style.height = '100%';
-    els.art.appendChild(host);
-    ytPlayer = new YT.Player(host, {
+    ytPlayer = new YT.Player(ytHost, {
       width:'100%', height:'100%', videoId:t.videoId,
       playerVars:{ autoplay:autoplay?1:0, controls:0, modestbranding:1, rel:0, playsinline:1 },
       events:{
@@ -358,8 +364,6 @@ function loadTrack(index, autoplay){
       }
     });
   } else {
-    els.art.innerHTML = '';
-    els.art.appendChild(ytPlayer.getIframe());
     ytPlayer.loadVideoById(t.videoId);
     if(!autoplay) ytPlayer.pauseVideo();
   }
