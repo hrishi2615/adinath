@@ -222,6 +222,7 @@ const PLAYLISTS = {
     { id:"g4", title:"New Song 1", artist:"", film:"", year:"", videoId:"QQmA1LM1LiM" },
     { id:"g5", title:"New Song 2", artist:"", film:"", year:"", videoId:"e9-43c2WaMg" },
     { id:"g6", title:"New Song 3", artist:"", film:"", year:"", videoId:"XkyCP6_2aa8" },
+    { id:"g7", title:"Loading playlist…", artist:"", film:"", year:"", playlistId:"PLI5hHy2c4bNE" },
   ],
   "रातों की महफ़िल": [
     { id:"n1", title:"Track title", artist:"Artist", film:"Film", year:"", videoId:null },
@@ -313,6 +314,32 @@ function loadTrack(index, autoplay){
     return;
   }
 
+  if(t.playlistId){
+    backend = 'yt-playlist';
+    if(!ytReady) return;
+    if(!ytPlayer){
+      els.art.innerHTML = '';
+      const host = document.createElement('div');
+      host.style.width = '100%'; host.style.height = '100%';
+      els.art.appendChild(host);
+      ytPlayer = new YT.Player(host, {
+        width:'100%', height:'100%',
+        playerVars:{ listType:'playlist', list:t.playlistId, autoplay:autoplay?1:0, controls:0, modestbranding:1, rel:0, playsinline:1 },
+        events:{
+          onReady:()=>{ if(autoplay) ytPlayer.playVideo(); startProgressLoop(); updateDurationLabel(); updatePlaylistMeta(); },
+          onStateChange:onPlayerStateChange,
+          onError:onPlayerError,
+        }
+      });
+    } else {
+      els.art.innerHTML = '';
+      els.art.appendChild(ytPlayer.getIframe());
+      ytPlayer.loadPlaylist({ list:t.playlistId, listType:'playlist' });
+      if(!autoplay) ytPlayer.pauseVideo();
+    }
+    return;
+  }
+
   if(!t.videoId){
     els.art.innerHTML = '<div class="art-fallback">add a<br/>videoId</div>';
     return;
@@ -350,10 +377,18 @@ htmlAudio.addEventListener('loadedmetadata', ()=>{ if(backend==='html5') updateD
 htmlAudio.addEventListener('error', ()=>{ if(backend==='html5'){ console.warn('Audio playback error'); } });
 
 function onPlayerStateChange(e){
-  if(e.data === YT.PlayerState.PLAYING){ isPlaying = true; updateDurationLabel(); }
+  if(e.data === YT.PlayerState.PLAYING){ isPlaying = true; updateDurationLabel(); if(backend==='yt-playlist') updatePlaylistMeta(); }
   else if(e.data === YT.PlayerState.PAUSED){ isPlaying = false; }
-  else if(e.data === YT.PlayerState.ENDED){ nextTrack(true); }
+  else if(e.data === YT.PlayerState.ENDED){ if(backend!=='yt-playlist') nextTrack(true); }
   updatePlayIcon();
+}
+function updatePlaylistMeta(){
+  if(!ytPlayer || !ytPlayer.getVideoData) return;
+  const data = ytPlayer.getVideoData();
+  if(data && data.title){
+    els.trackTitle.textContent = data.title;
+    els.trackSub.textContent = data.author || 'YouTube Playlist';
+  }
 }
 function onPlayerError(e){ console.warn('YouTube playback error', e.data); nextTrack(true); }
 
@@ -368,14 +403,16 @@ function togglePlay(){
     if(isPlaying) htmlAudio.pause(); else htmlAudio.play().catch(()=>{});
     return;
   }
-  if(!t.videoId || !ytPlayer) return;
+  if(!ytPlayer || (!t.videoId && !t.playlistId)) return;
   if(isPlaying) ytPlayer.pauseVideo(); else ytPlayer.playVideo();
 }
 function nextTrack(auto){
+  if(backend==='yt-playlist' && ytPlayer && ytPlayer.nextVideo){ ytPlayer.nextVideo(); return; }
   const list = PLAYLISTS[currentPlaylistName];
   loadTrack((currentIndex+1)%list.length, auto || isPlaying);
 }
 function prevTrack(){
+  if(backend==='yt-playlist' && ytPlayer && ytPlayer.previousVideo){ ytPlayer.previousVideo(); return; }
   const list = PLAYLISTS[currentPlaylistName];
   loadTrack((currentIndex-1+list.length)%list.length, isPlaying);
 }
@@ -431,7 +468,7 @@ function attachSeekHandlers(seekEl){
   seekEl.addEventListener('pointerdown', (evt)=>{
     const t = currentTrack();
     if(backend==='html5' && !t.src) return;
-    if(backend==='yt' && (!ytPlayer || !t.videoId)) return;
+    if((backend==='yt'||backend==='yt-playlist') && (!ytPlayer || (!t.videoId && !t.playlistId))) return;
     seekDragging = true; seekEl.setPointerCapture(evt.pointerId);
     setSeekFill(pctFromEvent(evt));
   });
@@ -443,7 +480,7 @@ function attachSeekHandlers(seekEl){
     if(backend==='html5'){
       const dur = htmlAudio.duration || 0;
       if(dur>0) htmlAudio.currentTime = (pct/100)*dur;
-    } else {
+    } else if(ytPlayer){
       const dur = ytPlayer.getDuration ? ytPlayer.getDuration() : 0;
       if(dur>0) ytPlayer.seekTo((pct/100)*dur, true);
     }
